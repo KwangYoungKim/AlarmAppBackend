@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>웹 메모 편집기</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0F172A; color: #FFF; margin: 0; padding: 20px; }
+        #app { max-width: 800px; margin: 0 auto; background-color: #1E293B; border-radius: 12px; padding: 32px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); min-height: 80vh; position: relative;}
+        #editor-screen { padding-bottom: 160px; }
+        h1, h2 { color: #00E5FF; }
+        input, textarea, button { font-family: inherit; width: 100%; box-sizing: border-box; }
+        button { background-color: #00E5FF; color: #000; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; padding: 10px; border-radius: 6px; margin-bottom: 12px;}
+        button:hover { background-color: #00B8D4; }
+        button.danger { background-color: transparent; color: #94A3B8; }
+        button.danger:hover { color: #EF4444; background-color: transparent; }
+        .memo-list-item { background-color: #334155; padding: 16px; border-radius: 8px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; }
+        .memo-list-item:hover { background-color: #475569; }
+        .memo-list-item:hover { background-color: #475569; }
+        .week-group-header { margin-top: 32px; margin-bottom: 0; color: #00E5FF; font-size: 1.1em; font-weight: bold; border-bottom: 1px solid #334155; padding-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: background 0.15s; border-radius: 6px 6px 0 0; padding: 10px 8px; }
+        .week-group-header:hover { background: rgba(0,229,255,0.07); }
+        .week-group-header .chevron { transition: transform 0.25s; display: inline-block; font-size: 0.85em; color: #64748B; }
+        .week-group-header.collapsed .chevron { transform: rotate(-90deg); }
+        .week-group-items { overflow: hidden; transition: max-height 0.3s ease; }
+        .week-group-items.collapsed { max-height: 0 !important; }
+        .week-group-items.expanded { margin-bottom: 8px; }
+        .pin-btn { background: transparent; border: none; font-size: 1.2em; padding: 4px; cursor: pointer; color: #64748B; transition: 0.2s; margin-right: 12px; }
+        .pin-btn.active { color: #F59E0B; }
+        .pin-btn:hover { transform: scale(1.1); }
+                /* Block Editor Styles */
+        .block-gap { height: 24px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748B; border: 1px dashed #334155; transition: 0.2s; border-radius: 4px; font-size: 0.9em; }
+        .block-gap:hover { background-color: rgba(0,229,255,0.1); color: #00E5FF; border-color: #00E5FF; }
+        .block { position: relative; margin-bottom: 8px; display: flex; align-items: flex-start; }
+        .drag-handle { cursor: grab; padding: 8px; color: #00E5FF; font-size: 1.5em; font-weight: bold; user-select: none; }
+        .drag-handle:active { cursor: grabbing; }
+        .block { position: relative; margin-bottom: 8px; display: flex; align-items: flex-start; group; }
+        .block-content { flex: 1; position: relative; }
+        .block-content-view {
+            color: #E2E8F0; line-height: 1.6; padding: 4px 0; word-break: break-word; white-space: pre-wrap; margin-bottom: 16px;
+        }
+        .block textarea { 
+            background: transparent; color: #E2E8F0; border: none; outline: none; 
+            font-size: 1.1em; line-height: 1.6; resize: none; overflow: hidden; padding: 4px 0;
+            width: 100%;
+        }
+        .block img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+        
+        /* Hover Actions */
+        .block-actions { 
+            opacity: 0; transition: opacity 0.2s; position: absolute; right: -40px; top: 0; 
+        }
+        .block:hover .block-actions { opacity: 1; }
+        .block-actions button { padding: 4px; margin: 0; font-size: 1.2em; cursor: pointer; }
+        
+        .hidden { display: none !important; }
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #00E5FF; color: #000; padding: 10px 20px; border-radius: 20px; display: none; font-weight: bold; z-index: 1000; }
+        
+        /* Fixed Bottom Toolbar */
+        .editor-toolbar {
+            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 800px; padding: 16px 32px; padding-bottom: max(16px, env(safe-area-inset-bottom)); box-sizing: border-box;
+            display: flex; gap: 12px; background: rgba(30, 41, 59, 0.98); border-top: 1px solid #334155;
+            z-index: 1000; box-shadow: 0 -4px 15px rgba(0,0,0,0.5);
+        }
+        .editor-toolbar button { margin: 0; width: auto; flex: 1; background-color: #334155; color: #E2E8F0; font-size: 1.05em; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        .editor-toolbar button:hover { background-color: #475569; }
+        
+        #memo-title {
+            font-size: 1.4em; font-weight: bold; background: transparent; border: none; outline: none;
+            color: #FFF; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid #334155;
+            resize: none; overflow: hidden; height: auto; line-height: 1.4; word-break: break-word;
+        }
+        #memo-title::placeholder { color: #64748B; }
+        .block textarea::placeholder { color: #475569; }
+        
+        /* Header controls */
+        .editor-header { 
+            position: sticky; top: 0; background: rgba(30, 41, 59, 0.98); margin-top: 0; margin-bottom: 24px;
+            padding: 16px 0; display: flex; justify-content: space-between; align-items: center; z-index: 1000;
+            border-bottom: 1px solid #334155;
+        }
+        .editor-header button { width: auto; margin: 0; padding: 8px 16px; font-size: 1.1em; display: flex; align-items: center; gap: 6px; }
+        
+        /* Auth inputs */
+        #login-screen input { background-color: #334155; color: #FFF; border: 1px solid #475569; padding: 12px; border-radius: 6px; margin-bottom: 16px; width: 100%; }
+        
+        .list-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px; position: sticky; top: 0;
+            background: #1E293B; z-index: 1000; padding: 16px 0; border-bottom: 1px solid #334155;
+        }
+        #list-screen { padding-bottom: 80px; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <h1 style="text-align: center; margin-bottom: 32px;">웹 메모 편집기</h1>
+        <input type="text" id="nickname" placeholder="닉네임">
+        <input type="password" id="pin" placeholder="PIN 번호">
+        <button onclick="login()" style="padding: 14px; font-size: 1.1em;">로그인</button>
+    </div>
+
+    <!-- Memo List Screen -->
+    <div id="list-screen" class="hidden">
+        <div class="list-header">
+            <h2 style="margin: 0;">내 메모</h2>
+            <button style="width: auto; margin: 0;" onclick="createNewMemo()">+ 새 메모</button>
+        </div>
+        <input type="search" id="memo-search" placeholder="제목으로 메모 검색..." oninput="renderMemoList()" style="background-color: #334155; color: #FFF; border: 1px solid #475569; padding: 12px; border-radius: 6px; margin-bottom: 24px; width: 100%;">
+        <div id="memo-list"></div>
+    </div>
+
+    <!-- Memo Editor Screen -->
+    <div id="editor-screen" class="hidden">
+        <div class="editor-header" id="editor-header-view">
+            <button onclick="goToList()" style="background-color: transparent; color: #94A3B8; padding: 0;">⬅️ 돌아가기</button>
+            <button onclick="toggleEditMode(true)" id="edit-btn">✏️ 수정</button>
+        </div>
+        <div class="editor-header hidden" id="editor-header-edit">
+            <button onclick="toggleEditMode(false)" style="background-color: transparent; color: #94A3B8; padding: 0;">❌ 취소</button>
+            <button onclick="saveMemo()" id="save-btn">💾 저장</button>
+        </div>
+        
+        <textarea id="memo-title" placeholder="제목 없는 문서" rows="1" oninput="autoResizeTitle()"></textarea>
+        <input type="datetime-local" id="memo-date" style="background: transparent; border: none; color: #64748B; margin-bottom: 24px;">
+        
+        <div id="memo-blocks"></div>
+        
+        <div class="editor-toolbar" style="flex-direction: column;">
+            <div id="format-toolbar" style="display: none; width: 100%; gap: 8px; margin-top: 8px; justify-content: center; background: #1E293B; padding: 8px; border-radius: 8px;">
+                <!-- dynamic formatting buttons -->
+            </div>
+            <div style="display: flex; width: 100%; gap: 12px;">
+                <button onclick="addTextBlock()">📝 텍스트 추가</button>
+                <button onclick="triggerImageUpload()">🖼️ 이미지 추가</button>
+                <input type="file" id="image-upload" accept="image/*" multiple class="hidden" onchange="uploadImages(event)">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    let currentUser = null;
+    let memos = [];
+    let currentEditingMemo = null;
+    let collapsedGroups = new Set(); // 접힌 주차 그룹 추적 (기본: 전부 접힘)
+    let editingBlocks = [];
+    let activeBlockIndex = null;
+    let draggedIndex = null;
+    let isEditing = false;
+
+    function toggleEditMode(editing) {
+        isEditing = editing;
+        const titleEl = document.getElementById('memo-title');
+        const dateEl = document.getElementById('memo-date');
+        const formatToolbar = document.getElementById('format-toolbar');
+        const controls = document.querySelector('.editor-toolbar > div:last-child');
+        
+        if (isEditing) {
+            document.getElementById('editor-header-view').classList.add('hidden');
+            document.getElementById('editor-header-edit').classList.remove('hidden');
+            titleEl.disabled = false;
+            dateEl.disabled = false;
+            titleEl.style.borderBottom = '1px solid #334155';
+            controls.style.display = 'flex';
+        } else {
+            document.getElementById('editor-header-view').classList.remove('hidden');
+            document.getElementById('editor-header-edit').classList.add('hidden');
+            titleEl.disabled = true;
+            dateEl.disabled = true;
+            titleEl.style.borderBottom = 'none';
+            formatToolbar.style.display = 'none';
+            controls.style.display = 'none';
+        }
+        renderBlocks();
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.style.display = 'block';
+        setTimeout(() => toast.style.display = 'none', 3000);
+    }
+
+    async function login() {
+        const nickname = document.getElementById('nickname').value;
+        const pin = document.getElementById('pin').value;
+        
+        try {
+            const res = await fetch('/api/users/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname, pin })
+            });
+            if (res.ok) {
+                currentUser = await res.json();
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('list-screen').classList.remove('hidden');
+                loadMemos();
+            } else {
+                showToast('로그인 실패: 닉네임과 PIN을 확인하세요.');
+            }
+        } catch (e) {
+            showToast('서버 오류');
+        }
+    }
+
+    async function loadMemos() {
+        try {
+            const res = await fetch(`/api/sync/${currentUser.id}/richmemos`);
+            if (res.ok) {
+                memos = await res.json();
+                memos.sort((a, b) => b.createdAt - a.createdAt);
+                renderMemoList();
+            }
+        } catch (e) {
+            showToast('메모를 불러오는데 실패했습니다.');
+        }
+    }
+
+    function getWeekString(dateInMillis) {
+        const d = new Date(dateInMillis);
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1;
+        const firstDay = new Date(year, month - 1, 1).getDay();
+        const date = d.getDate();
+        const weekOfMonth = Math.ceil((date + firstDay) / 7);
+        return `${year}년 ${month}월 ${weekOfMonth}주차`;
+    }
+
+    async function togglePin(memoId, event) {
+        event.stopPropagation();
+        const memo = memos.find(m => m.id === memoId);
+        if (!memo) return;
+        memo.pinned = !memo.pinned;
+        memo.lastModified = Date.now();
+        renderMemoList();
+        
+        try {
+            await fetch(`/api/sync/${currentUser.id}/richmemos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([memo])
+            });
+        } catch(e) {
+            memo.pinned = !memo.pinned;
+            renderMemoList();
+            showToast('고정 상태 변경 실패');
+        }
+    }
+
+    function renderMemoList() {
+        const container = document.getElementById('memo-list');
+        container.innerHTML = '';
+        
+        const searchInput = document.getElementById('memo-search');
+        const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        
+        let filteredMemos = memos;
+        if (query) {
+            filteredMemos = memos.filter(m => {
+                if ((m.title || '제목 없음').toLowerCase().includes(query)) return true;
+                if (m.contentJson) {
+                    try {
+                        const blocks = JSON.parse(m.contentJson);
+                        for (let i = 0; i < blocks.length; i++) {
+                            if (blocks[i].type === 'text' && (blocks[i].content || '').toLowerCase().includes(query)) {
+                                return true;
+                            }
+                        }
+                    } catch (e) {}
+                }
+                return false;
+            });
+        }
+
+        if (filteredMemos.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #94A3B8; margin-top: 40px;">저장된 메모가 없습니다.</p>';
+            return;
+        }
+        
+        const pinnedMemos = filteredMemos.filter(m => m.pinned);
+        const unpinnedMemos = filteredMemos.filter(m => !m.pinned);
+        
+        if (pinnedMemos.length > 0) {
+            const pinHeader = document.createElement('div');
+            pinHeader.className = 'week-group-header';
+            pinHeader.innerText = '📌 고정된 메모';
+            container.appendChild(pinHeader);
+            pinnedMemos.forEach(memo => container.appendChild(createMemoElement(memo)));
+        }
+
+        const groups = {};
+        unpinnedMemos.forEach(memo => {
+            const weekStr = getWeekString(memo.createdAt);
+            if (!groups[weekStr]) groups[weekStr] = [];
+            groups[weekStr].push(memo);
+        });
+
+        for (const weekStr in groups) {
+            // 처음 렌더링 시 기본적으로 접힘 상태로 추가
+            if (!collapsedGroups.has('__init_' + weekStr)) {
+                collapsedGroups.add('__init_' + weekStr);
+                collapsedGroups.add(weekStr);
+            }
+            const isCollapsed = collapsedGroups.has(weekStr);
+
+            const header = document.createElement('div');
+            header.className = 'week-group-header' + (isCollapsed ? ' collapsed' : '');
+            header.innerHTML = `<span>📅 ${weekStr} <span style="font-size:0.85em; color:#94A3B8; font-weight:normal;">(${groups[weekStr].length}개)</span></span><span class="chevron">▼</span>`;
+            header.onclick = () => {
+                if (collapsedGroups.has(weekStr)) {
+                    collapsedGroups.delete(weekStr);
+                } else {
+                    collapsedGroups.add(weekStr);
+                }
+                renderMemoList();
+            };
+            container.appendChild(header);
+
+            const itemsWrapper = document.createElement('div');
+            itemsWrapper.className = 'week-group-items ' + (isCollapsed ? 'collapsed' : 'expanded');
+            if (!isCollapsed) {
+                const totalH = groups[weekStr].length * 200;
+                itemsWrapper.style.maxHeight = totalH + 'px';
+            } else {
+                itemsWrapper.style.maxHeight = '0px';
+            }
+            groups[weekStr].forEach(memo => itemsWrapper.appendChild(createMemoElement(memo)));
+            container.appendChild(itemsWrapper);
+        }
+    }
+
+    function createMemoElement(memo) {
+        const div = document.createElement('div');
+        div.className = 'memo-list-item';
+        
+        const date = new Date(memo.createdAt).toLocaleString();
+        const pinClass = memo.pinned ? 'pin-btn active' : 'pin-btn';
+        div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div style="flex: 1; min-width: 0;">
+                    <h3 style="margin: 0 0 8px 0; color: #E2E8F0; word-break: break-all;">${memo.title || '제목 없음'}</h3>
+                    <small style="color: #64748B;">${date}</small>
+                </div>
+                <div style="display: flex; align-items: center; white-space: nowrap;">
+                    <button class="${pinClass}" onclick="togglePin('${memo.id}', event)">📌</button>
+                    <button class="danger" style="width: auto; padding: 4px 8px; margin: 0; background: transparent; border: 1px solid #475569;" onclick="deleteMemo('${memo.id}', event)">삭제</button>
+                </div>
+            </div>
+        `;
+        div.onclick = () => openMemo(memo);
+        return div;
+    }
+
+    async function deleteMemo(id, event) {
+        event.stopPropagation();
+        if(!confirm('정말 삭제하시겠습니까?')) return;
+        
+        try {
+            const res = await fetch(`/api/sync/${currentUser.id}/richmemos/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast('삭제되었습니다.');
+                loadMemos();
+            }
+        } catch (e) {
+            showToast('삭제 실패');
+        }
+    }
+
+    function generateId() {
+        return Math.random().toString(36).substring(2, 15);
+    }
+
+    function createNewMemo() {
+        currentEditingMemo = {
+            id: generateId(),
+            userId: currentUser.id,
+            title: '',
+            contentJson: '[]',
+            createdAt: Date.now(),
+            lastModified: Date.now()
+        };
+        editingBlocks = [{ type: 'text', content: '' }];
+        isEditing = true;
+        showEditor();
+    }
+
+    function openMemo(memo) {
+        currentEditingMemo = { ...memo };
+        try {
+            editingBlocks = JSON.parse(memo.contentJson);
+            if (!Array.isArray(editingBlocks)) editingBlocks = [];
+        } catch (e) {
+            editingBlocks = [];
+        }
+        if (editingBlocks.length === 0) {
+            editingBlocks.push({ type: 'text', content: '' });
+        }
+        isEditing = false;
+        showEditor();
+    }
+
+    function showEditor() {
+        document.getElementById('list-screen').classList.add('hidden');
+        document.getElementById('editor-screen').classList.remove('hidden');
+        const titleEl = document.getElementById('memo-title');
+        titleEl.value = currentEditingMemo.title;
+        setTimeout(autoResizeTitle, 10);
+        
+        const dateObj = new Date(currentEditingMemo.createdAt || Date.now());
+        const tzOffset = dateObj.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(dateObj - tzOffset)).toISOString().slice(0, 16);
+        document.getElementById('memo-date').value = localISOTime;
+        
+        toggleEditMode(isEditing);
+    }
+
+    function goToList() {
+        document.getElementById('editor-screen').classList.add('hidden');
+        document.getElementById('list-screen').classList.remove('hidden');
+        loadMemos();
+    }
+
+    function autoResize(el) {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+    }
+
+    function updateFormatToolbar() {
+        const tb = document.getElementById('format-toolbar');
+        if (!isEditing || activeBlockIndex === null || !editingBlocks[activeBlockIndex]) {
+            if (tb) {
+                document.body.appendChild(tb);
+                tb.style.display = 'none';
+            }
+            return;
+        }
+        
+        const activeContentDiv = document.querySelectorAll('.block-content')[activeBlockIndex];
+        if (activeContentDiv && tb) {
+            activeContentDiv.appendChild(tb);
+            tb.style.display = 'flex';
+        }
+
+        const block = editingBlocks[activeBlockIndex];
+        
+        if (block.type === 'text') {
+            const isBold = block.isBold ? 'color:#00E5FF;' : 'color:#E2E8F0;';
+            tb.innerHTML = `
+                <button style="width:auto; ${isBold} font-weight:bold;" onclick="toggleBold()">B</button>
+                <button style="width:auto;" onclick="changeFontSize(-2)">A-</button>
+                <button style="width:auto;" onclick="changeFontSize(2)">A+</button>
+            `;
+        } else if (block.type === 'image') {
+            tb.innerHTML = `
+                <span style="color:#FFF; line-height:36px; padding:0 8px;">크기:</span>
+                <button style="width:auto;" onclick="changeWidthScale(-0.1)">-</button>
+                <button style="width:auto;" onclick="changeWidthScale(0.1)">+</button>
+            `;
+        }
+    }
+
+    function toggleBold() {
+        if(activeBlockIndex !== null) {
+            editingBlocks[activeBlockIndex].isBold = !editingBlocks[activeBlockIndex].isBold;
+            renderBlocks();
+            updateFormatToolbar();
+        }
+    }
+    function changeFontSize(delta) {
+        if(activeBlockIndex !== null) {
+            let s = editingBlocks[activeBlockIndex].fontSize || 18;
+            s += delta;
+            if(s < 10) s = 10;
+            if(s > 48) s = 48;
+            editingBlocks[activeBlockIndex].fontSize = s;
+            renderBlocks();
+        }
+    }
+    function changeWidthScale(delta) {
+        if(activeBlockIndex !== null) {
+            let w = editingBlocks[activeBlockIndex].widthScale || 1.0;
+            w += delta;
+            if(w < 0.3) w = 0.3;
+            if(w > 1.0) w = 1.0;
+            editingBlocks[activeBlockIndex].widthScale = w;
+            renderBlocks();
+        }
+    }
+
+    function autoResizeTitle() {
+        const titleEl = document.getElementById('memo-title');
+        if (!titleEl) return;
+        titleEl.style.height = 'auto';
+        titleEl.style.height = titleEl.scrollHeight + 'px';
+    }
+
+    function handleDragStart(e, idx) { draggedIndex = idx; e.dataTransfer.effectAllowed = 'move'; e.target.style.opacity = '0.5'; }
+    function handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function handleDrop(e, idx) {
+        e.preventDefault();
+        if (draggedIndex !== null && draggedIndex !== idx) {
+            const temp = editingBlocks[draggedIndex];
+            editingBlocks[draggedIndex] = editingBlocks[idx];
+            editingBlocks[idx] = temp;
+            if(activeBlockIndex === draggedIndex) activeBlockIndex = idx;
+            else if(activeBlockIndex === idx) activeBlockIndex = draggedIndex;
+            renderBlocks();
+            updateFormatToolbar();
+        }
+    }
+    function handleDragEnd(e) { e.target.style.opacity = '1'; draggedIndex = null; }
+
+    function moveBlockUp(idx) {
+        if (idx > 0) {
+            const temp = editingBlocks[idx];
+            editingBlocks[idx] = editingBlocks[idx - 1];
+            editingBlocks[idx - 1] = temp;
+            if(activeBlockIndex === idx) activeBlockIndex = idx - 1;
+            else if(activeBlockIndex === idx - 1) activeBlockIndex = idx;
+            renderBlocks();
+            updateFormatToolbar();
+        }
+    }
+
+    function moveBlockDown(idx) {
+        if (idx < editingBlocks.length - 1) {
+            const temp = editingBlocks[idx];
+            editingBlocks[idx] = editingBlocks[idx + 1];
+            editingBlocks[idx + 1] = temp;
+            if(activeBlockIndex === idx) activeBlockIndex = idx + 1;
+            else if(activeBlockIndex === idx + 1) activeBlockIndex = idx;
+            renderBlocks();
+            updateFormatToolbar();
+        }
+    }
+
+    function insertBlockAt(index) {
+        editingBlocks.splice(index, 0, { type: 'text', content: '', fontSize: 18, isBold: false, widthScale: 1.0 });
+        activeBlockIndex = index;
+        renderBlocks();
+        updateFormatToolbar();
+    }
+
+    function renderBlocks() {
+        const formatTb = document.getElementById('format-toolbar');
+        if (formatTb && formatTb.parentNode) {
+            document.body.appendChild(formatTb); // 임시 보관
+            formatTb.style.display = 'none';
+        }
+        
+        const container = document.getElementById('memo-blocks');
+        container.innerHTML = '';
+        
+        editingBlocks.forEach((block, index) => {
+            if (isEditing) {
+                // Gap for insertion
+                const gap = document.createElement('div');
+                gap.className = 'block-gap';
+                gap.innerHTML = '+ 여기에 추가';
+                gap.onclick = () => insertBlockAt(index);
+                container.appendChild(gap);
+            }
+
+            const div = document.createElement('div');
+            div.className = isEditing ? 'block' : 'block-view';
+            if (isEditing) {
+                div.style.marginBottom = '8px';
+            } else {
+                div.style.marginBottom = '16px'; // Better spacing for view mode
+            }
+            
+            if (isEditing) {
+                div.draggable = false; // Set to true only when handle is pressed
+                div.ondragstart = (e) => handleDragStart(e, index);
+                div.ondragover = handleDragOver;
+                div.ondrop = (e) => handleDrop(e, index);
+                div.ondragend = (e) => { handleDragEnd(e); div.draggable = false; };
+                
+                const handleContainer = document.createElement('div');
+                handleContainer.style.display = 'flex';
+                handleContainer.style.flexDirection = 'column';
+                handleContainer.style.alignItems = 'center';
+                handleContainer.style.marginRight = '8px';
+
+                const upBtn = document.createElement('div');
+                upBtn.innerHTML = '▲';
+                upBtn.style.cursor = 'pointer';
+                upBtn.style.padding = '4px';
+                upBtn.style.color = '#00E5FF';
+                upBtn.onclick = () => moveBlockUp(index);
+
+                const handle = document.createElement('div');
+                handle.className = 'drag-handle';
+                handle.innerHTML = '≡';
+                handle.style.padding = '4px';
+                handle.onmousedown = () => div.draggable = true;
+                handle.onmouseup = () => div.draggable = false;
+                handle.onmouseleave = () => div.draggable = false;
+
+                const downBtn = document.createElement('div');
+                downBtn.innerHTML = '▼';
+                downBtn.style.cursor = 'pointer';
+                downBtn.style.padding = '4px';
+                downBtn.style.color = '#00E5FF';
+                downBtn.onclick = () => moveBlockDown(index);
+
+                if (index > 0) handleContainer.appendChild(upBtn);
+                handleContainer.appendChild(handle);
+                if (index < editingBlocks.length - 1) handleContainer.appendChild(downBtn);
+
+                div.appendChild(handleContainer);
+            }
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'block-content';
+            if (isEditing) {
+                contentDiv.onclick = () => { activeBlockIndex = index; updateFormatToolbar(); };
+            }
+            
+            if (block.type === 'text') {
+                if (isEditing) {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = block.content;
+                    textarea.placeholder = '내용을 입력하세요...';
+                    textarea.style.fontSize = (block.fontSize || 18) + 'px';
+                    textarea.style.fontWeight = block.isBold ? 'bold' : 'normal';
+                    
+                    textarea.oninput = (e) => { 
+                        block.content = e.target.value; 
+                        autoResize(e.target);
+                    };
+                    textarea.onkeydown = (e) => {
+                        if (e.key === 'Backspace' && textarea.value === '' && editingBlocks.length > 1) {
+                            e.preventDefault();
+                            removeBlock(index);
+                        }
+                    };
+                    textarea.onfocus = () => { activeBlockIndex = index; updateFormatToolbar(); };
+                    setTimeout(() => autoResize(textarea), 0);
+                    contentDiv.appendChild(textarea);
+                } else {
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'block-content-view';
+                    textDiv.style.fontSize = (block.fontSize || 18) + 'px';
+                    textDiv.style.fontWeight = block.isBold ? 'bold' : 'normal';
+                    textDiv.innerText = block.content;
+                    contentDiv.appendChild(textDiv);
+                }
+            } else if (block.type === 'image') {
+                const img = document.createElement('img');
+                const path = block.content;
+                const filename = path.split('/').pop();
+                img.src = `/api/images/${filename}`;
+                img.style.width = ((block.widthScale || 1.0) * 100) + '%';
+                img.style.borderRadius = '8px';
+                if (!isEditing) {
+                    img.style.marginBottom = '16px';
+                } else {
+                    img.style.marginTop = '8px';
+                }
+                img.onerror = () => { img.src = ''; img.alt = '이미지 로드 실패: ' + filename; img.style.border = '1px solid #475569'; img.style.padding = '20px'; };
+                contentDiv.appendChild(img);
+            }
+
+            if (isEditing) {
+                const actions = document.createElement('div');
+                actions.className = 'block-actions';
+                actions.innerHTML = `<button onclick="removeBlock(${index})" class="danger" title="블록 삭제">✕</button>`;
+                div.appendChild(contentDiv);
+                div.appendChild(actions);
+            } else {
+                div.appendChild(contentDiv);
+            }
+            container.appendChild(div);
+        });
+
+        if (isEditing) {
+            // Final Gap
+            const finalGap = document.createElement('div');
+            finalGap.className = 'block-gap';
+            finalGap.innerHTML = '+ 마지막에 추가';
+            finalGap.onclick = () => insertBlockAt(editingBlocks.length);
+            container.appendChild(finalGap);
+        }
+    }
+    function addTextBlock() {
+        let insertIndex = (activeBlockIndex !== null) ? activeBlockIndex + 1 : editingBlocks.length;
+        editingBlocks.splice(insertIndex, 0, { type: 'text', content: '' });
+        activeBlockIndex = insertIndex;
+        renderBlocks();
+        setTimeout(() => {
+            const textareas = document.querySelectorAll('.block textarea');
+            if(textareas.length > insertIndex) {
+                textareas[insertIndex].focus();
+            } else if (textareas.length > 0) {
+                textareas[textareas.length - 1].focus();
+            }
+        }, 50);
+    }
+
+    function removeBlock(index) {
+        editingBlocks.splice(index, 1);
+        if (editingBlocks.length === 0) {
+            editingBlocks.push({ type: 'text', content: '' });
+        }
+        renderBlocks();
+    }
+
+    function triggerImageUpload() {
+        document.getElementById('image-upload').click();
+    }
+
+    async function uploadImages(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        let insertIndex = (activeBlockIndex !== null) ? activeBlockIndex + 1 : editingBlocks.length;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const formData = new FormData();
+            const ext = file.name.split('.').pop();
+            const filename = `web_${Date.now()}_${i}.${ext}`;
+            formData.append('file', file);
+            formData.append('filename', filename);
+
+            const tempIndex = insertIndex;
+            editingBlocks.splice(tempIndex, 0, { type: 'text', content: '이미지 업로드 중...' });
+            renderBlocks();
+
+            try {
+                const res = await fetch('/api/images/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    editingBlocks[tempIndex] = { type: 'image', content: filename };
+                    if (i === files.length - 1) {
+                         editingBlocks.splice(tempIndex + 1, 0, { type: 'text', content: '' });
+                         insertIndex += 2;
+                         activeBlockIndex = tempIndex + 1;
+                    } else {
+                         insertIndex++;
+                    }
+                    renderBlocks();
+                } else {
+                    editingBlocks.splice(tempIndex, 1);
+                    renderBlocks();
+                    showToast('이미지 업로드 실패');
+                }
+            } catch (e) {
+                editingBlocks.splice(tempIndex, 1);
+                renderBlocks();
+                showToast('이미지 업로드 중 오류 발생');
+            }
+        }
+        event.target.value = '';
+    }
+
+    async function saveMemo() {
+        const title = document.getElementById('memo-title').value;
+        const dateVal = document.getElementById('memo-date').value;
+        
+        currentEditingMemo.title = title;
+        currentEditingMemo.contentJson = JSON.stringify(editingBlocks);
+        currentEditingMemo.lastModified = Date.now();
+        if (dateVal) {
+            currentEditingMemo.createdAt = new Date(dateVal).getTime();
+        }
+        
+        try {
+            const res = await fetch(`/api/sync/${currentUser.id}/richmemos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([currentEditingMemo])
+            });
+            if (res.ok) {
+                showToast('저장되었습니다.');
+                toggleEditMode(false);
+            }
+        } catch (e) {
+            showToast('저장 실패');
+        }    }
+    // 자동 로그인
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('list-screen').classList.remove('hidden');
+            loadMemos();
+        }
+    });
+
+    // 뒤로가기 및 새로고침 방지
+    history.pushState({ screen: 'main' }, document.title, location.href);
+    window.addEventListener('popstate', function (event) {
+        if (!document.getElementById('editor-screen').classList.contains('hidden')) {
+            goToList(); // 에디터 화면이면 리스트로 돌아가기
+        }
+        history.pushState({ screen: 'main' }, document.title, location.href); // 리스트 화면이면 앱 탈출 방지
+    });
+    window.addEventListener('beforeunload', function (e) {
+        e.preventDefault();
+        e.returnValue = '';
+    });
+</script>
+
+</body>
+</html>
