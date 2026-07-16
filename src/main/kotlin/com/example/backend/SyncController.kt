@@ -2,6 +2,7 @@ package com.example.backend
 
 import org.springframework.web.bind.annotation.*
 import org.springframework.http.ResponseEntity
+import org.springframework.transaction.annotation.Transactional
 
 @RestController
 @RequestMapping("/api")
@@ -147,6 +148,7 @@ class SyncController(
         return ResponseEntity.ok().build()
     }
 
+    @Transactional
     @GetMapping("/sync/{userId}/medications")
     fun getMedications(@PathVariable userId: String): ResponseEntity<Map<String, Any>> {
         val items = medicationItemRepository.findByUserId(userId)

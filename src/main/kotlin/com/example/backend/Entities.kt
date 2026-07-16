@@ -72,7 +72,7 @@ data class MedicationItem(
     val id: String,
     var userId: String? = null,
     val name: String,
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     val times: List<String>,
     val createdAt: String
 )
