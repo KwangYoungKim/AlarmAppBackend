@@ -41,3 +41,9 @@ interface MedicationLogRepository : JpaRepository<MedicationLog, Long> {
 interface HospitalVisitRepository : JpaRepository<HospitalVisit, String> {
     fun findByUserId(userId: String): List<HospitalVisit>
 }
+
+@Repository
+interface DailyPathRepository : JpaRepository<DailyPath, String> {
+    fun findByUserId(userId: String): List<DailyPath>
+    fun findByUserIdAndDate(userId: String, date: String): DailyPath?
+}

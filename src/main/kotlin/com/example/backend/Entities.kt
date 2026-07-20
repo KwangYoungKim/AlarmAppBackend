@@ -99,3 +99,13 @@ data class HospitalVisit(
     val morningAlarmTime: String,
     val note: String
 )
+
+@Entity
+data class DailyPath(
+    @Id
+    val id: String, // userId_YYYY-MM-DD
+    var userId: String? = null,
+    val date: String,
+    @Column(columnDefinition = "TEXT")
+    val pathJson: String
+)

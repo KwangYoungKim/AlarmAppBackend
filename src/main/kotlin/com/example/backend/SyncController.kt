@@ -14,7 +14,8 @@ class SyncController(
     private val alarmRepository: AlarmRepository,
     private val medicationItemRepository: MedicationItemRepository,
     private val medicationLogRepository: MedicationLogRepository,
-    private val hospitalVisitRepository: HospitalVisitRepository
+    private val hospitalVisitRepository: HospitalVisitRepository,
+    private val dailyPathRepository: DailyPathRepository
 ) {
 
     // --- Auth / User ---
@@ -69,6 +70,7 @@ class SyncController(
         if (datesInRequest.isNotEmpty()) {
             val toDelete = existing.filter { it.date in datesInRequest }
             locationMemoRepository.deleteAll(toDelete)
+            locationMemoRepository.flush()
         }
         locationMemoRepository.saveAll(memos.map { it.copy(userId = userId) })
         return ResponseEntity.ok().build()
@@ -87,6 +89,7 @@ class SyncController(
         if (datesInRequest.isNotEmpty()) {
             val toDelete = existing.filter { it.date in datesInRequest }
             stepDataRepository.deleteAll(toDelete)
+            stepDataRepository.flush()
         }
         stepDataRepository.saveAll(steps.map { it.copy(userId = userId) })
         return ResponseEntity.ok().build()
@@ -102,6 +105,7 @@ class SyncController(
     fun syncAlarms(@PathVariable userId: String, @RequestBody alarms: List<Alarm>): ResponseEntity<Void> {
         val existing = alarmRepository.findByUserId(userId)
         alarmRepository.deleteAll(existing)
+        alarmRepository.flush()
         alarmRepository.saveAll(alarms.map { it.copy(userId = userId) })
         return ResponseEntity.ok().build()
     }
@@ -135,6 +139,7 @@ class SyncController(
         }
 
         medicationItemRepository.deleteAll(medicationItemRepository.findByUserId(userId))
+        medicationItemRepository.flush()
         medicationItemRepository.saveAll(items)
 
         val datesInRequest = logs.map { it.date }.toSet()
@@ -142,6 +147,7 @@ class SyncController(
             val existingLogs = medicationLogRepository.findByUserId(userId)
             val toDelete = existingLogs.filter { it.date in datesInRequest }
             medicationLogRepository.deleteAll(toDelete)
+            medicationLogRepository.flush()
         }
         medicationLogRepository.saveAll(logs)
 
@@ -161,6 +167,7 @@ class SyncController(
     fun syncHospitals(@PathVariable userId: String, @RequestBody visits: List<HospitalVisit>): ResponseEntity<Void> {
         val existing = hospitalVisitRepository.findByUserId(userId)
         hospitalVisitRepository.deleteAll(existing)
+        hospitalVisitRepository.flush()
         hospitalVisitRepository.saveAll(visits.map { it.copy(userId = userId) })
         return ResponseEntity.ok().build()
     }
@@ -190,5 +197,24 @@ class SyncController(
         } catch (ex: Exception) {
             ResponseEntity.internalServerError().build()
         }
+    }
+
+    // --- Daily Paths ---
+    @PostMapping("/sync/{userId}/paths")
+    fun syncPaths(@PathVariable userId: String, @RequestBody paths: List<DailyPath>): ResponseEntity<Void> {
+        val existing = dailyPathRepository.findByUserId(userId)
+        val datesInRequest = paths.map { it.date }.toSet()
+        if (datesInRequest.isNotEmpty()) {
+            val toDelete = existing.filter { it.date in datesInRequest }
+            dailyPathRepository.deleteAll(toDelete)
+            dailyPathRepository.flush()
+        }
+        dailyPathRepository.saveAll(paths.map { it.copy(userId = userId) })
+        return ResponseEntity.ok().build()
+    }
+
+    @GetMapping("/sync/{userId}/paths")
+    fun getPaths(@PathVariable userId: String): ResponseEntity<List<DailyPath>> {
+        return ResponseEntity.ok(dailyPathRepository.findByUserId(userId))
     }
 }
